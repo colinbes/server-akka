@@ -1,14 +1,29 @@
+import com.typesafe.sbt.packager.docker._
+
 scalacOptions ++= Seq("-deprecation", "-feature")
 lazy val scala213 = "2.13.4"
 lazy val scala212 = "2.12.13"
 
 lazy val commonSettings = Seq(
-  name := "server",
+  organization := "com.bdesigns",
+  name := "server-akka",
   version := "1.0.0",
   scalaVersion := scala212
 )
 
+enablePlugins(JavaAppPackaging)
 enablePlugins(DockerPlugin)
+
+dockerBaseImage := "openjdk:8-jre-alpine"
+dockerExposedPorts := Seq(8082)
+dockerRepository := Some("bdesigns")
+daemonUser in Docker    := "daemon"
+//packageName in Docker := "server-akka"
+dockerCommands ++= Seq(
+  Cmd("USER", "root"),
+  ExecCmd("RUN", "apk", "add", "--no-cache", "bash"))
+
+scriptClasspath in bashScriptDefines ~= (cp => "/etc/akka-server" +: cp)
 
 lazy val commonDependencies = Seq(
   "org.slf4j" % "slf4j-api" % "1.7.30",
@@ -48,9 +63,9 @@ lazy val root = (project in file("."))
     libraryDependencies ++= commonDependencies ++ Seq(
       dependencies.redis,
       dependencies.akkaStreamTyped,
-      dependencies.akkaStream,
-//      dependencies.akkaActorTyped,
-      dependencies.akkaActor,
+//      dependencies.akkaStream,
+      dependencies.akkaActorTyped,
+//      dependencies.akkaActor,
       dependencies.akkaHttp,
       dependencies.akkaSlf4j,
       dependencies.jodaTime,

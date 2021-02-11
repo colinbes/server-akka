@@ -1,8 +1,7 @@
 package com.bdesigns.akka.rest
 
 import akka.NotUsed
-import akka.actor.{ActorRef, ActorSystem}
-import akka.event.LoggingAdapter
+import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.http.scaladsl.model.sse.ServerSentEvent
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
@@ -12,7 +11,9 @@ import akka.http.scaladsl.server.directives.RouteDirectives.complete
 import akka.stream.scaladsl.{BroadcastHub, Keep, Source, SourceQueueWithComplete}
 import akka.stream.{DelayOverflowStrategy, OverflowStrategy}
 import com.bdesigns.akka.actors.StreamingEventSourceActor
+import com.bdesigns.akka.actors.StreamingEventSourceActor._
 import com.bdesigns.akka.json.Json4sFormat
+import org.slf4j.Logger
 
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration._
@@ -20,11 +21,11 @@ import scala.concurrent.duration._
 trait BasicService extends Json4sFormat {
 
   import akka.http.scaladsl.marshalling.sse.EventStreamMarshalling._
-  import com.bdesigns.akka.actors.{Subscribe, Unsubscribe}
-
-  implicit val actorSystem: ActorSystem
+  implicit val actorSystem: ActorSystem[Nothing]
   implicit val executionContext: ExecutionContextExecutor
-  val logger: LoggingAdapter
+  val logger: Logger
+
+  val streamingActor: ActorRef[SSEActor]
 
   def queue(): (SourceQueueWithComplete[String], Source[ServerSentEvent, NotUsed]) = Source.queue[String](Int.MaxValue, OverflowStrategy.backpressure)
     .delay(1.seconds, DelayOverflowStrategy.backpressure)
@@ -33,9 +34,7 @@ trait BasicService extends Json4sFormat {
     .toMat(BroadcastHub.sink[ServerSentEvent])(Keep.both)
     .run()
 
-//  lazy val streamingActor: ActorRef = actorSystem.actorOf(StreamingEventSourceActor.props(sourceQueue), name = StreamingEventSourceActor.name)
-  lazy val streamingActor: ActorRef = actorSystem.actorOf(StreamingEventSourceActor.props(), name = StreamingEventSourceActor.name)
-
+//  val consumerActor = userActor.systemActorOf(ConsumerActor(consumerFn), "pulsar-consumer")
   lazy val basicRoute: Route =
     path("events") {
       concat(
@@ -44,14 +43,14 @@ trait BasicService extends Json4sFormat {
             complete {
               val (sourceQueue, eventsSource) = queue()
               val key = sessionCookie.value
-              streamingActor ! Subscribe(key, sourceQueue)
-              logger.warning(s"subscribe $key")
+              streamingActor ! StreamingEventSourceActor.Subscribe(key, sourceQueue)
+              logger.warn(s"subscribe $key")
               val ev = eventsSource
                 .watchTermination() { (m, f) =>
                   f.onComplete(r => {
-                    logger.warning(s"Unsubscribe $key")
-                    streamingActor ! Unsubscribe(key)
-                    logger.warning(r.toString)
+                    logger.warn(s"Unsubscribe $key")
+                    streamingActor ! StreamingEventSourceActor.Unsubscribe(key)
+                    logger.warn(r.toString)
                   })
                   m
                 }

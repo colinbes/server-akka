@@ -3,7 +3,8 @@
   <component name="ScalaCompilerConfiguration">
     <option name="implicitConversions" value="true" />
     <option name="deprecationWarnings" value="true" />
-    <profile name="sbt 1" modules="server">
+    <profile name="sbt 1" modules="server-akka_4488" />
+    <profile name="sbt 2" modules="server,server-akka">
       <option name="deprecationWarnings" value="true" />
       <option name="featureWarnings" value="true" />
     </profile>

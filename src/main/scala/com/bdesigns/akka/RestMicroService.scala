@@ -1,11 +1,14 @@
 package com.bdesigns.akka
 
-import akka.actor.ActorSystem
+import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.event.{Logging, LoggingAdapter}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.directives.DebuggingDirectives
 import akka.util.Timeout
+import com.bdesigns.akka.actors.{IotSupervisor, StreamingEventSourceActor}
+import com.bdesigns.akka.actors.StreamingEventSourceActor.SSEActor
 import com.redis.{M, PubSubMessage, RedisClient, S, U}
+import org.slf4j.Logger
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContextExecutor, Future}
@@ -31,10 +34,11 @@ object RestMicroService extends App
 */
 
   implicit val timeout: Timeout = Timeout(4.seconds)
-  implicit val actorSystem: ActorSystem = ActorSystem("bdesigns-akka")
-  implicit val executionContext: ExecutionContextExecutor = actorSystem.dispatcher
+  implicit val actorSystem: ActorSystem[Nothing] = ActorSystem[Nothing](IotSupervisor(), "bdesigns-akka")
+  implicit val executionContext: ExecutionContextExecutor = actorSystem.executionContext
+  lazy val streamingActor: ActorRef[SSEActor] = actorSystem.systemActorOf(StreamingEventSourceActor(), "eventsource")
 
-  val logger:LoggingAdapter = actorSystem.log
+  val logger: Logger = actorSystem.log
 
   //  val api = routes
   val api = DebuggingDirectives.logRequest("AkkaRest", Logging.WarningLevel)(routes)
@@ -44,7 +48,7 @@ object RestMicroService extends App
     case Success(bound) =>
       logger.info(s"Server online at http://${bound.localAddress.getHostString}:${bound.localAddress.getPort}/")
     case Failure(e) =>
-      logger.warning(s"Server could not start! ${e.getMessage}")
+      logger.warn(s"Server could not start! ${e.getMessage}")
       actorSystem.terminate()
   }
   // StdIn.readLine()

@@ -11,10 +11,10 @@
   <h1>{{ message }}</h1>
   <span>SSE Date: {{ now }}</span>
   <hr>
-  <ul id="v-for-object" class="demo">
-    <li v-for="value in dataList">
-      {{ value }}
-    </li>
+  <ul  v-if="value" id="v-for-object" class="demo">
+    <!--    <li v-for="value in dataList">-->
+    <li>time: {{ value }}</li>
+    <li>name: {{ username }}, online: {{ online }} </li>
   </ul>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>

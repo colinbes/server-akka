@@ -3,7 +3,9 @@ const app = new Vue({
   data: {
     message: 'Vue/SSE Example!',
     now: 'wait for it ...',
-    dataList: []
+    username: '?',
+    online: false,
+    value: null
   },
   created () {
     this.setupStream()
@@ -17,8 +19,13 @@ const app = new Vue({
                 
       evtSource.addEventListener('myEvent', event => {
         let data = JSON.parse(event.data)
-        this.now = data.msg
-        this.dataList.push(data.msg)
+        if (data.event === 'date') {
+            this.now = data.value
+            this.value = data.value
+        } else if (data.event="userchange") {
+            this.username = data.value.name
+            this.online = data.value.online
+        }
       }, false)
 
       evtSource.addEventListener('error', event => {

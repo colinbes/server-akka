@@ -3,72 +3,84 @@ package com.bdesigns.akka.actors
 import java.util.Calendar
 import _root_.akka.actor.{Actor, Cancellable, Props}
 import _root_.akka.stream.scaladsl.SourceQueueWithComplete
-import com.bdesigns.akka.json.Json4sFormat
-import scala.concurrent.duration._
+import akka.actor.typed.{ActorSystem, Behavior}
+import akka.actor.typed.scaladsl.Behaviors
+import com.bdesigns.akka.json.Json4sFormat._
 
-sealed trait SSEActor
-case object StartClock extends SSEActor
-case object StopClock extends SSEActor
-case class Subscribe(id: String, source: SourceQueueWithComplete[String]) extends SSEActor
-case class Unsubscribe(id: String) extends SSEActor
+import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.duration._
+import org.json4s.jackson.Serialization.write
 
 object StreamingEventSourceActor {
-  def name = "StreamingEventSourceActor"
-  def props(): Props = Props(new StreamingEventSourceActor)
-  case class UpdateDashboard(data: String)
-}
+  sealed trait StreamedResponse[T] {
+    def event: String
+    def data: T
+  }
+  case class ClockStreamedResponse[String](event: String = "date", value: String)
+  case class UserInfoStreamedResponse[UserInfoChange](event: String = "userchange", value: UserInfoChange)
 
-class StreamingEventSourceActor()
-  extends Actor
-    with Json4sFormat {
+  sealed trait SSEActor
+  case object StartClock extends SSEActor
+  case object StopClock extends SSEActor
+  case class Subscribe(id: String, source: SourceQueueWithComplete[String]) extends SSEActor
+  case class Unsubscribe(id: String) extends SSEActor
+  case class UserInfoChange(name: String, online: Boolean) extends SSEActor
 
-  private var cache = Map.empty[String, SourceQueueWithComplete[String]]
-  implicit val ec = context.system.dispatcher
-  private var cancellableO: Option[Cancellable] = None
+  def apply(): Behavior[SSEActor] = {
+    var cache = Map.empty[String, SourceQueueWithComplete[String]]
+    var cancellableO: Option[Cancellable] = None
 
-  override def receive: Receive = {
+    Behaviors.receive { (context, message) =>
+      implicit val system: ActorSystem[Nothing] = context.system
+      implicit val ec: ExecutionContextExecutor = system.executionContext
 
-    case Subscribe(id, source) => {
-      if (cache.isEmpty) {
-        self ! StartClock
+      message match {
+        case Subscribe(id, source) => {
+          if (cache.isEmpty) {
+            context.self ! StartClock
+          }
+          cache = cache + (id -> source)
+          println(s"Add $id, length ${cache.size}")
+          Behaviors.same
+        }
+        case Unsubscribe(id) => {
+          cache = cache - id
+          if (cache.isEmpty) {
+            context.self ! StopClock
+          }
+          println(s"Remove $id, length ${cache.size}")
+          Behaviors.same
+        }
+        case info@UserInfoChange(name, online) => {
+          println(s"UserInfoChange $name, $online")
+          val response = write(UserInfoStreamedResponse(value = info))
+          cache.values.foreach(source => {
+            source.offer(response)
+          })
+          Behaviors.same
+        }
+        case StartClock => {
+          //send periodic date/time to all browsers
+          val dt = Calendar.getInstance().getTime()
+          val response = write(ClockStreamedResponse(value = dt.toString))
+          println(s"sending $response")
+          cancellableO = Some(context.system.scheduler.scheduleOnce(5.second, {() => context.self ! StartClock}))
+          cache.values.foreach(source => {
+            println("offering response")
+            source.offer(response)
+          })
+          Behaviors.same
+        }
+
+        case StopClock => {
+          cancellableO match {
+            case Some(cancellable) =>
+              if (cancellable.cancel()) cancellableO = None
+            case None =>
+          }
+          Behaviors.same
+        }
       }
-      cache = cache + (id -> source)
-      println(s"Add $id, length ${cache.size}")
     }
-    case Unsubscribe(id) => {
-      cache = cache - id
-      println(s"Remove $id, length ${cache.size}")
-    }
-
-    case StartClock => {
-
-      //send periodic date/time to all browsers
-      val dt = Calendar.getInstance().getTime()
-      val response = s"""{"msg":"${dt}"}"""
-      println(s"sending $response")
-      cancellableO = Some(context.system.scheduler.scheduleOnce(5.second) {
-        self ! StartClock
-      })
-      cache.values.foreach(source => {
-        println("offering response")
-        source.offer(response)
-      })
-    }
-
-    case StopClock => {
-      cancellableO match {
-        case Some(cancellable) =>
-          cancellable.cancel()
-        case None =>
-      }
-    }
-
-//    case StreamingEventSourceActor.UpdateDashboard(msg) => {
-//      // send broadcase to all connect browsers. Triggered by PUT method in Rest end point PUT events
-//      val testMessage =
-//        s"""{"msg":"$msg"}
-//          |""".stripMargin
-//      source.offer(testMessage)
-//    }
   }
 }

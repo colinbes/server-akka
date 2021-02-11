@@ -10,7 +10,7 @@ import org.slf4j.Logger
 
 trait SiteService extends Json4sFormat {
 
-  val logger:LoggingAdapter
+  val logger:Logger
 
   val siteRoute: Route = concat (
     pathSingleSlash {
@@ -19,7 +19,7 @@ trait SiteService extends Json4sFormat {
     pathPrefix("") {
       get {
         val uuid = java.util.UUID.randomUUID.toString
-        logger.warning(s"new uuid $uuid")
+        logger.warn(s"new uuid $uuid")
         setCookie(HttpCookie("theCookie", uuid)) {
           respondWithHeaders(RawHeader("x-my-header", "my-akka-test")) {
             getFromResourceDirectory("")
