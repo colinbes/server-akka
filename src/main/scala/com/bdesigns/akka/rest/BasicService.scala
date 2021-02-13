@@ -10,7 +10,7 @@ import akka.http.scaladsl.server.directives.PathDirectives.path
 import akka.http.scaladsl.server.directives.RouteDirectives.complete
 import akka.stream.scaladsl.{BroadcastHub, Keep, Source, SourceQueueWithComplete}
 import akka.stream.{DelayOverflowStrategy, OverflowStrategy}
-import com.bdesigns.akka.actors.StreamingEventSourceActor
+import com.bdesigns.akka.actors.{StreamingActor, StreamingEventSourceActor}
 import com.bdesigns.akka.actors.StreamingEventSourceActor._
 import com.bdesigns.akka.json.Json4sFormat
 import org.slf4j.Logger
@@ -18,14 +18,13 @@ import org.slf4j.Logger
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration._
 
-trait BasicService extends Json4sFormat {
+trait BasicService extends Json4sFormat
+  with StreamingActor {
 
   import akka.http.scaladsl.marshalling.sse.EventStreamMarshalling._
   implicit val actorSystem: ActorSystem[Nothing]
   implicit val executionContext: ExecutionContextExecutor
   val logger: Logger
-
-  val streamingActor: ActorRef[SSEActor]
 
   def queue(): (SourceQueueWithComplete[String], Source[ServerSentEvent, NotUsed]) = Source.queue[String](Int.MaxValue, OverflowStrategy.backpressure)
     .delay(1.seconds, DelayOverflowStrategy.backpressure)

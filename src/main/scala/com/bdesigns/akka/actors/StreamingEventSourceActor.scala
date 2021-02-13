@@ -3,13 +3,18 @@ package com.bdesigns.akka.actors
 import java.util.Calendar
 import _root_.akka.actor.{Actor, Cancellable, Props}
 import _root_.akka.stream.scaladsl.SourceQueueWithComplete
-import akka.actor.typed.{ActorSystem, Behavior}
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
+import com.bdesigns.akka.actors.StreamingEventSourceActor.SSEActor
 import com.bdesigns.akka.json.Json4sFormat._
 
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration._
 import org.json4s.jackson.Serialization.write
+
+trait StreamingActor {
+  val streamingActor: ActorRef[SSEActor]
+}
 
 object StreamingEventSourceActor {
   sealed trait StreamedResponse[T] {
@@ -26,30 +31,40 @@ object StreamingEventSourceActor {
   case class Unsubscribe(id: String) extends SSEActor
   case class UserInfoChange(name: String, online: Boolean) extends SSEActor
 
-  def apply(): Behavior[SSEActor] = {
-    var cache = Map.empty[String, SourceQueueWithComplete[String]]
-    var cancellableO: Option[Cancellable] = None
+  def apply(): Behavior[SSEActor] = initial(Map.empty[String, SourceQueueWithComplete[String]])
 
+  private def initial(cache: Map[String, SourceQueueWithComplete[String]]): Behavior[SSEActor] = {
     Behaviors.receive { (context, message) =>
       implicit val system: ActorSystem[Nothing] = context.system
       implicit val ec: ExecutionContextExecutor = system.executionContext
 
       message match {
         case Subscribe(id, source) => {
-          if (cache.isEmpty) {
-            context.self ! StartClock
-          }
-          cache = cache + (id -> source)
           println(s"Add $id, length ${cache.size}")
-          Behaviors.same
+          running(cache + (id -> source), context.system.scheduler.scheduleOnce(5.second, {() => context.self ! StartClock}))
+        }
+        case _ => Behaviors.unhandled
+      }
+    }
+  }
+
+  private def running(cache: Map[String, SourceQueueWithComplete[String]], cancellable: Cancellable): Behavior[SSEActor] = {
+    Behaviors.receive {(context, message) =>
+      implicit val system: ActorSystem[Nothing] = context.system
+      implicit val ec: ExecutionContextExecutor = system.executionContext
+
+      message match {
+        case Subscribe(id, source) => {
+          println(s"Add $id, length ${cache.size}")
+          running(cache + (id -> source), cancellable)
         }
         case Unsubscribe(id) => {
-          cache = cache - id
-          if (cache.isEmpty) {
+          val cache1 = cache - id
+          if (cache1.isEmpty) {
             context.self ! StopClock
           }
           println(s"Remove $id, length ${cache.size}")
-          Behaviors.same
+          running(cache1 - id, cancellable)
         }
         case info@UserInfoChange(name, online) => {
           println(s"UserInfoChange $name, $online")
@@ -64,21 +79,17 @@ object StreamingEventSourceActor {
           val dt = Calendar.getInstance().getTime()
           val response = write(ClockStreamedResponse(value = dt.toString))
           println(s"sending $response")
-          cancellableO = Some(context.system.scheduler.scheduleOnce(5.second, {() => context.self ! StartClock}))
           cache.values.foreach(source => {
             println("offering response")
             source.offer(response)
           })
-          Behaviors.same
+          running(cache, context.system.scheduler.scheduleOnce(5.second, {() => context.self ! StartClock}))
         }
 
         case StopClock => {
-          cancellableO match {
-            case Some(cancellable) =>
-              if (cancellable.cancel()) cancellableO = None
-            case None =>
-          }
-          Behaviors.same
+          val result = cancellable.cancel()
+          println(s"stopping clock $result")
+          initial(Map.empty[String, SourceQueueWithComplete[String]])
         }
       }
     }

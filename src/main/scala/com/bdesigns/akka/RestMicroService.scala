@@ -1,13 +1,14 @@
 package com.bdesigns.akka
 
+import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.{ActorRef, ActorSystem}
-import akka.event.{Logging, LoggingAdapter}
+import akka.event.Logging
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.directives.DebuggingDirectives
 import akka.util.Timeout
-import com.bdesigns.akka.actors.{IotSupervisor, StreamingEventSourceActor}
+import com.bdesigns.akka.RestMicroService.actorSystem
 import com.bdesigns.akka.actors.StreamingEventSourceActor.SSEActor
-import com.redis.{M, PubSubMessage, RedisClient, S, U}
+import com.bdesigns.akka.actors.{IoTSupervisor, StreamingEventSourceActor}
 import org.slf4j.Logger
 
 import scala.concurrent.duration._
@@ -19,7 +20,21 @@ trait MyTrait {
   def getRootContext: String
 }
 
+trait IoTActor {
+  implicit val timeout: Timeout = Timeout(3.seconds)
+  implicit val actorSystem: ActorSystem[IoTSupervisor.IoTCommand] = ActorSystem[IoTSupervisor.IoTCommand](IoTSupervisor(), "bdesigns-akka")
+  implicit val executionContext: ExecutionContextExecutor = actorSystem.executionContext
+  val logger: Logger = actorSystem.log
+}
+
+trait StreamingActorImpl {
+  implicit val timeout: Timeout
+  val responseFuture: Future[ActorRef[SSEActor]] = actorSystem.ask(ref => IoTSupervisor.IoTSpawn(StreamingEventSourceActor(), "source-event", ref))
+  val streamingActor: ActorRef[SSEActor] = Await.result(responseFuture, 3.seconds)
+}
+
 object RestMicroService extends App
+  with IoTActor with StreamingActorImpl
   with RestInterface
   with RootContext
   with CORSHandler {
@@ -33,12 +48,10 @@ object RestMicroService extends App
   def getCookiePath = cookiePath
 */
 
-  implicit val timeout: Timeout = Timeout(4.seconds)
-  implicit val actorSystem: ActorSystem[Nothing] = ActorSystem[Nothing](IotSupervisor(), "bdesigns-akka")
-  implicit val executionContext: ExecutionContextExecutor = actorSystem.executionContext
-  lazy val streamingActor: ActorRef[SSEActor] = actorSystem.systemActorOf(StreamingEventSourceActor(), "eventsource")
-
-  val logger: Logger = actorSystem.log
+//  implicit val timeout: Timeout = Timeout(4.seconds)
+//  implicit val actorSystem: ActorSystem[Nothing] = ActorSystem[Nothing](IotSupervisor(), "bdesigns-akka")
+//  implicit val executionContext: ExecutionContextExecutor = actorSystem.executionContext
+//  val logger: Logger = actorSystem.log
 
   //  val api = routes
   val api = DebuggingDirectives.logRequest("AkkaRest", Logging.WarningLevel)(routes)
@@ -51,6 +64,9 @@ object RestMicroService extends App
       logger.warn(s"Server could not start! ${e.getMessage}")
       actorSystem.terminate()
   }
+
+  println(s"actorSystem $actorSystem")
+  println(s"streamingActor $streamingActor")
   // StdIn.readLine()
   // system.terminate()
   Await.result(actorSystem.whenTerminated, Duration.Inf)
