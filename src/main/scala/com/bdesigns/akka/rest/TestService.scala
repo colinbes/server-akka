@@ -12,54 +12,77 @@ import com.bdesigns.akka.actors._
 import com.bdesigns.akka.json.Json4sFormat
 import com.bdesigns.akka.utils.RedisConnector
 import com.redis._
+import de.heikoseeberger.akkahttpjson4s.Json4sSupport
 import org.slf4j.Logger
+import org.json4s.jackson.Serialization.write
 
-import java.net.URI
-import scala.concurrent.duration._
-import scala.concurrent.{Await, Future}
+import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.language.implicitConversions
 import scala.util.{Failure, Success}
+import scala.concurrent.duration._
+import java.net.URI
+
+case class ActorListItem(name: String, ref: String)
 
 trait RedisKeyEvents extends StreamingActor {
+  implicit val actorSystem: ActorSystem[IoTSupervisor.IoTCommand]
+  implicit val executionContext: ExecutionContextExecutor
+  implicit val timeout: Timeout
   val redisUri: URI = RedisConnector.getConnectionUri
-  val actorSystem: ActorSystem[Nothing]
   val redisClient: RedisClient = new RedisClient(redisUri)
+  val logger: Logger
 
-  val redisSubscriberActor: ActorRef[Msg] = actorSystem.systemActorOf(RedisSubscriber(redisUri), "redis-sub")
-  redisSubscriberActor ! Register(callback)
-  redisSubscriberActor ! Subscribe(Array(EVENT_SET, EVENT_EXPIRED))
+  val redisSubscriberFuture: Future[ActorRef[Msg]] = actorSystem.ask(ref => IoTSupervisor.IoTSpawn(RedisSubscriber(redisUri), "redis-sub", ref))
+
+  for {
+    redisSubscriberActor <- redisSubscriberFuture
+  } {
+    redisSubscriberActor ! Register(callback)
+    redisSubscriberActor ! Subscribe(Array(EVENT_SET, EVENT_EXPIRED))
+  }
+
 
   def callback(pubsub: PubSubMessage): Unit = pubsub match {
-    case S(channel, no) => println("subscribed to " + channel + " and count = " + no)
-    case U(channel, no) => println("unsubscribed from " + channel + " and count = " + no)
+    case S(channel, no) => logger.info("subscribed to " + channel + " and count = " + no)
+    case U(channel, no) => logger.info("unsubscribed from " + channel + " and count = " + no)
     case M(EVENT_EXPIRED, "name") =>
       streamingActor ! StreamingEventSourceActor.UserInfoChange("---", online = false)
     case M(EVENT_SET, keyname) =>
       val username: String = redisClient.get(keyname).getOrElse("---")
       streamingActor ! StreamingEventSourceActor.UserInfoChange(username, online = true)
-    case _ => println(pubsub)
+    case _ => logger.info(s"Unknown callback pubsub ${pubsub.toString}")
   }
 }
 
-trait TestService extends Json4sFormat with RedisKeyEvents {
-  val logger: Logger
+trait TestService extends Json4sFormat
+  with RedisKeyEvents
+  with Json4sSupport {
   implicit val actorSystem: ActorSystem[IoTSupervisor.IoTCommand]
+  implicit val executionContext: ExecutionContextExecutor
+  implicit val timeout: Timeout
+  val logger: Logger
   val redisUri: URI
   val redisClient: RedisClient
-//  val redisActor: ActorRef[RedisFn] = actorSystem.systemActorOf(RedisActor(redisUri), "redis-actor")
-  implicit val timeout: Timeout
 
   val dbRestarts: Behavior[RedisFn] = Behaviors
     .supervise(Behaviors.supervise(RedisActor(redisUri)).onFailure[RuntimeException](SupervisorStrategy.restart))
     .onFailure[IllegalStateException](SupervisorStrategy.restart)
 
   val redisActorFuture: Future[ActorRef[RedisFn]] = actorSystem.ask(ref => IoTSupervisor.IoTSpawn(dbRestarts, "redis-actor", ref))
-//  val redisActorFuture: Future[ActorRef[RedisFn]] = actorSystem.ask(ref => IotSupervisor.IoTSpawn(RedisActor(redisUri), "redis-actor", ref))
-  val redisActor: ActorRef[RedisFn] = Await.result(redisActorFuture, 3.seconds)
-
-  println(s"redisActor $redisActor")
-  println(s"subActor $redisSubscriberActor")
   val testRoute: Route = concat (
+    path("set") {
+      post {
+        entity(as[RedisActor.Set]) { dataSet =>
+          val resFuture: Future[Unit] = redisActorFuture.map(redisActor =>
+            redisActor ! RedisActor.Set(dataSet.key, dataSet.value, dataSet.expires)
+          )
+          onComplete(resFuture) {
+            case Success(_)  => complete("OK")
+            case Failure(ex) => complete(s" Exception ${ex.getMessage}")
+          }
+        }
+      }
+    },
     path("test") {
       pathEnd {
           extractClientIP { clientIP =>
@@ -70,23 +93,34 @@ trait TestService extends Json4sFormat with RedisKeyEvents {
       }
     },
     path("info") {
-      import scala.concurrent.duration._
-
-      redisActor ! RedisActor.Set("name", "okiedokie", Some(20.seconds))
-      complete(s"Uri ${redisUri.toString}")
+      get {
+        val resFuture: Future[Unit] = redisActorFuture.map(redisActor1 => redisActor1 ! RedisActor.Set("name", "okiedokie", Some(20)))
+        onComplete(resFuture) {
+          case Success(_)  => complete(s"Uri ${redisUri.toString}")
+          case Failure(ex) => complete(s" Exception ${ex.getMessage}")
+        }
+      }
     },
     path ("actors") {
-      val actors = s"""
-        |actorSystem $actorSystem
-        |streamingActor $streamingActor
-        |redisActor $redisActor
-        |subActor $redisSubscriberActor
-      """.stripMargin
-      complete(actors)
+      val actorsFuture = for {
+        redisActor <- redisActorFuture
+        redisSubscriberActor <- redisSubscriberFuture
+      } yield {
+        List(
+          ActorListItem("actorSystem", actorSystem.path.toStringWithoutAddress),
+          ActorListItem("streamingActor", streamingActor.path.toStringWithoutAddress),
+          ActorListItem("redisActor", redisActor.path.toStringWithoutAddress),
+          ActorListItem("subActor", redisSubscriberActor.path.toStringWithoutAddress)
+        )
+      }
+      onComplete(actorsFuture) {
+        case Success(actors) => complete(actors)
+        case Failure(ex)     => complete(ex.getMessage)
+      }
     },
     path("fetch") {
       pathEnd {
-        val responseFuture: Future[RedisActor.Reply] = redisActor.ask(ref => RedisActor.Get("name", ref))
+        val responseFuture: Future[RedisActor.Reply] = redisActorFuture.flatMap(redisActor => redisActor.ask(ref => RedisActor.Get("name", ref)))
 
         onComplete(responseFuture) {
           case Success(RedisActor.RedisResponse(msg)) => complete {

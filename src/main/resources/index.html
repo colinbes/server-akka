@@ -9,15 +9,32 @@
 <body>
 <div id="app">
   <h1>{{ message }}</h1>
-  <span>SSE Date: {{ now }}</span>
   <hr>
-  <ul  v-if="value" id="v-for-object" class="demo">
+  <h2>Actor paths</h2>
+  <ul v-for="actor in actors">
+    <li>{{ actor.name }} : {{ actor.ref }}</li>
+  </ul>
+  <hr>
+  <h2>Redis Test</h2>
+  <div id="redis-entry">
+    <form id="redis-entry-form" class="form-horizontal" @submit.prevent>
+      <label for="redis-key">Redis Key:</label><input id="redis-key" placeholder="Redis Key" type="text" v-model="redisKey1"/>
+      <label for="redis-value">Value:</label><input id="redis-value" placeholder="Redis Value" type="text" v-model="redisValue1"/>
+      <label for="redis-timeout">Value:</label><input id="redis-timeout" placeholder="Redis Timeout" type="number" v-model="redisTimeout"/>
+      <button color="primary" :disabled="!formValid" @click="setRedisKey(redisKey1, redisValue1, redisTimeout)">Set Value</button>
+    </form>
+  </div>
+  <hr>
+  <h2>SSE Test</h2>
+  <span>SSE Date: {{ now }}</span>
+  <ul v-if="value" id="v-for-object" class="demo">
     <!--    <li v-for="value in dataList">-->
     <li>time: {{ value }}</li>
     <li>name: {{ username }}, online: {{ online }} </li>
   </ul>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js" integrity="sha512-bZS47S7sPOxkjU/4Bt0zrhEtWx0y0CRkhEp8IckzK+ltifIIE9EMIMTuT/mEzoIMewUINruDBIR/jJnbguonqQ==" crossorigin="anonymous"></script>
 <script src="myScripts.js"></script>
 </body>
 </html>

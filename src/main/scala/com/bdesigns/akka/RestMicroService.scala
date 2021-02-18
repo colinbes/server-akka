@@ -1,5 +1,6 @@
 package com.bdesigns.akka
 
+import akka.actor.ActorLogging
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.event.Logging
@@ -39,20 +40,6 @@ object RestMicroService extends App
   with RootContext
   with CORSHandler {
 
-//  val etagTimeToLive = 5.minutes
-
-/*  val cookiePath = s"/$getRootContext"
-  val cookieLifetime = 30*60000L
-  val cookieName = "ABTReportCookie"
-
-  def getCookiePath = cookiePath
-*/
-
-//  implicit val timeout: Timeout = Timeout(4.seconds)
-//  implicit val actorSystem: ActorSystem[Nothing] = ActorSystem[Nothing](IotSupervisor(), "bdesigns-akka")
-//  implicit val executionContext: ExecutionContextExecutor = actorSystem.executionContext
-//  val logger: Logger = actorSystem.log
-
   //  val api = routes
   val api = DebuggingDirectives.logRequest("AkkaRest", Logging.WarningLevel)(routes)
   val serverBinding: Future[Http.ServerBinding] = Http().newServerAt("0.0.0.0", 8082).bind(api)
@@ -65,8 +52,8 @@ object RestMicroService extends App
       actorSystem.terminate()
   }
 
-  println(s"actorSystem $actorSystem")
-  println(s"streamingActor $streamingActor")
+  logger.info(s"actorSystem $actorSystem")
+  logger.info(s"streamingActor $streamingActor")
   // StdIn.readLine()
   // system.terminate()
   Await.result(actorSystem.whenTerminated, Duration.Inf)

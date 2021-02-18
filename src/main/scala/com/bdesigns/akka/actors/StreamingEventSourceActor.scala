@@ -1,7 +1,7 @@
 package com.bdesigns.akka.actors
 
 import java.util.Calendar
-import _root_.akka.actor.{Actor, Cancellable, Props}
+import _root_.akka.actor.{Actor, ActorLogging, Cancellable, Props}
 import _root_.akka.stream.scaladsl.SourceQueueWithComplete
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
@@ -40,7 +40,7 @@ object StreamingEventSourceActor {
 
       message match {
         case Subscribe(id, source) => {
-          println(s"Add $id, length ${cache.size}")
+          context.log.info(s"Add $id, length ${cache.size}")
           running(cache + (id -> source), context.system.scheduler.scheduleOnce(5.second, {() => context.self ! StartClock}))
         }
         case _ => Behaviors.unhandled
@@ -55,7 +55,7 @@ object StreamingEventSourceActor {
 
       message match {
         case Subscribe(id, source) => {
-          println(s"Add $id, length ${cache.size}")
+          context.log.info(s"Add $id, length ${cache.size}")
           running(cache + (id -> source), cancellable)
         }
         case Unsubscribe(id) => {
@@ -63,11 +63,11 @@ object StreamingEventSourceActor {
           if (cache1.isEmpty) {
             context.self ! StopClock
           }
-          println(s"Remove $id, length ${cache.size}")
+          context.log.info(s"Remove $id, length ${cache.size}")
           running(cache1 - id, cancellable)
         }
         case info@UserInfoChange(name, online) => {
-          println(s"UserInfoChange $name, $online")
+          context.log.info(s"UserInfoChange $name, $online")
           val response = write(UserInfoStreamedResponse(value = info))
           cache.values.foreach(source => {
             source.offer(response)
@@ -78,9 +78,9 @@ object StreamingEventSourceActor {
           //send periodic date/time to all browsers
           val dt = Calendar.getInstance().getTime()
           val response = write(ClockStreamedResponse(value = dt.toString))
-          println(s"sending $response")
+          context.log.info(s"sending $response")
           cache.values.foreach(source => {
-            println("offering response")
+            context.log.info("offering response")
             source.offer(response)
           })
           running(cache, context.system.scheduler.scheduleOnce(5.second, {() => context.self ! StartClock}))
@@ -88,7 +88,7 @@ object StreamingEventSourceActor {
 
         case StopClock => {
           val result = cancellable.cancel()
-          println(s"stopping clock $result")
+          context.log.info(s"stopping clock $result")
           initial(Map.empty[String, SourceQueueWithComplete[String]])
         }
       }
