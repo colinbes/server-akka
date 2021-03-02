@@ -14,13 +14,11 @@ import com.bdesigns.akka.utils.RedisConnector
 import com.redis._
 import de.heikoseeberger.akkahttpjson4s.Json4sSupport
 import org.slf4j.Logger
-import org.json4s.jackson.Serialization.write
 
+import java.net.URI
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.language.implicitConversions
 import scala.util.{Failure, Success}
-import scala.concurrent.duration._
-import java.net.URI
 
 case class ActorListItem(name: String, ref: String)
 
@@ -29,8 +27,12 @@ trait RedisKeyEvents extends StreamingActor {
   implicit val executionContext: ExecutionContextExecutor
   implicit val timeout: Timeout
   val redisUri: URI = RedisConnector.getConnectionUri
-  val redisClient: RedisClient = new RedisClient(redisUri)
   val logger: Logger
+
+  val redisClient: RedisClient = {
+    logger.info(s"Connecting to redis at $redisUri")
+    new RedisClient(redisUri)
+  }
 
   val redisSubscriberFuture: Future[ActorRef[Msg]] = actorSystem.ask(ref => IoTSupervisor.IoTSpawn(RedisSubscriber(redisUri), "redis-sub", ref))
 

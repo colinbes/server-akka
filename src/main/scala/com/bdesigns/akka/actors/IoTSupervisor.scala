@@ -12,7 +12,6 @@ object IoTSupervisor {
 }
 
 class IoTSupervisor(context: ActorContext[IoTCommand]) extends AbstractBehavior[IoTCommand](context) {
-  context.log.info("IoT Application started")
   override def onMessage(msg: IoTCommand): Behavior[IoTCommand] = msg match {
     case IoTSpawn(behavior, name, replyTo) =>
       val actor = context.spawn(behavior, name)

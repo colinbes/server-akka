@@ -1,4 +1,4 @@
-import com.typesafe.sbt.packager.docker._
+import com.typesafe.sbt.packager.docker.{ExecCmd, _}
 
 scalacOptions ++= Seq("-deprecation", "-feature")
 lazy val scala213 = "2.13.4"
@@ -21,7 +21,9 @@ daemonUser in Docker    := "daemon"
 //packageName in Docker := "server-akka"
 dockerCommands ++= Seq(
   Cmd("USER", "root"),
-  ExecCmd("RUN", "apk", "add", "--no-cache", "bash"))
+  ExecCmd("RUN", "apk", "add", "--no-cache", "bash"),
+  ExecCmd("RUN", "apk", "add", "redis")
+)
 
 scriptClasspath in bashScriptDefines ~= (cp => "/etc/akka-server" +: cp)
 
@@ -52,6 +54,7 @@ lazy val dependencies =
     val akkaSlf4j = "com.typesafe.akka" %% "akka-slf4j" % akkaVersion
     val akkaJson4s = "de.heikoseeberger" %% "akka-http-json4s" % akkaHttpJsonV
     val json4sJackson = "org.json4s" %% "json4s-jackson" % "3.6.10"
+    val cors = "ch.megard" %% "akka-http-cors" % "1.1.1"
     val specs2Core = "org.specs2" %% "specs2-core" % specs2Version % Test
     val specs2jUnit = "org.specs2" %% "specs2-junit" % specs2Version % Test
     val akkaStreamTst = "com.typesafe.akka" %% "akka-stream-testkit" % akkaVersion % Test
@@ -61,6 +64,7 @@ lazy val root = (project in file("."))
   .settings(commonSettings: _*)
   .settings(
     libraryDependencies ++= commonDependencies ++ Seq(
+      dependencies.cors,
       dependencies.redis,
       dependencies.akkaStreamTyped,
 //      dependencies.akkaStream,

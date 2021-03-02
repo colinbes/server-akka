@@ -6,5 +6,4 @@ trait RestServices extends SiteService
   with BasicService
   with TestService
 {
-  this: CORSHandler =>
 }

@@ -29,9 +29,9 @@ const app = new Vue({
     getActors() {
         axios.get('http://localhost:8082/api/actors')
             .then(response => {
-                const dd = response.data
-                this.actors = dd
+                this.actors = response.data
             })
+            .catch (error => console.error(`getActors error ${error}`))
     },
     setRedisKey(key, value, expires) {
         let dataSet = {key: key, value: value}
@@ -50,10 +50,10 @@ const app = new Vue({
             .then(response => {
                 console.log(`POST set key ${response.data}`)
             })
-            .catch (error => console.log(error))
+            .catch (error => console.error(`setKey error ${error}`))
     },
     setupStream () {
-      let evtSource = new EventSource("http://localhost:8082/events")
+      let evtSource = new EventSource("api/events", {withCredentials: true})
                 
       evtSource.addEventListener('myEvent', event => {
         let data = JSON.parse(event.data)

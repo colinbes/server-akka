@@ -1,6 +1,5 @@
 package com.bdesigns.akka
 
-import akka.actor.ActorLogging
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.{ActorRef, ActorSystem}
 import akka.event.Logging
@@ -37,9 +36,9 @@ trait StreamingActorImpl {
 object RestMicroService extends App
   with IoTActor with StreamingActorImpl
   with RestInterface
-  with RootContext
-  with CORSHandler {
+  with RootContext {
 
+  val CookieName = "abt-cookie-api"
   //  val api = routes
   val api = DebuggingDirectives.logRequest("AkkaRest", Logging.WarningLevel)(routes)
   val serverBinding: Future[Http.ServerBinding] = Http().newServerAt("0.0.0.0", 8082).bind(api)
