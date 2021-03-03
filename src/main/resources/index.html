@@ -20,7 +20,7 @@
     <form id="redis-entry-form" class="form-horizontal" @submit.prevent>
       <label for="redis-key">Redis Key:</label><input id="redis-key" placeholder="Redis Key" type="text" v-model="redisKey1"/>
       <label for="redis-value">Value:</label><input id="redis-value" placeholder="Redis Value" type="text" v-model="redisValue1"/>
-      <label for="redis-timeout">Value:</label><input id="redis-timeout" placeholder="Redis Timeout" type="number" v-model="redisTimeout"/>
+      <label for="redis-timeout">Expires:</label><input id="redis-timeout" placeholder="Redis Timeout" type="number" v-model="redisTimeout"/>
       <button color="primary" :disabled="!formValid" @click="setRedisKey(redisKey1, redisValue1, redisTimeout)">Set Value</button>
     </form>
   </div>
