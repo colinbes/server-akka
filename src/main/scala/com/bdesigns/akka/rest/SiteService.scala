@@ -19,7 +19,7 @@ trait SiteService extends Json4sFormat {
     pathPrefix("") {
       get {
         val uuid = java.util.UUID.randomUUID.toString
-        logger.warn(s"new uuid $uuid")
+        logger.debug(s"new uuid $uuid")
         setCookie(HttpCookie(CookieName, uuid)) {
           respondWithHeaders(RawHeader("x-my-header", "my-akka-test")) {
             getFromResourceDirectory("")

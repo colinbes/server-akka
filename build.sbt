@@ -21,8 +21,8 @@ daemonUser in Docker    := "daemon"
 //packageName in Docker := "server-akka"
 dockerCommands ++= Seq(
   Cmd("USER", "root"),
-  ExecCmd("RUN", "apk", "add", "--no-cache", "bash"),
-  ExecCmd("RUN", "apk", "add", "redis")
+  ExecCmd("RUN", "apk", "add", "--no-cache", "bash")
+//  ExecCmd("RUN", "apk", "add", "redis")
 )
 
 scriptClasspath in bashScriptDefines ~= (cp => "/etc/akka-server" +: cp)
@@ -35,7 +35,7 @@ lazy val commonDependencies = Seq(
   dependencies.specs2jUnit
 )
 
-logLevel := Level.Warn
+logLevel := Level.Info
 lazy val dependencies =
   new {
     val akkaVersion = "2.6.12"

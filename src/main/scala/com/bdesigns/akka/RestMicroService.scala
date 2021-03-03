@@ -39,8 +39,8 @@ object RestMicroService extends App
   with RootContext {
 
   val CookieName = "abt-cookie-api"
-  //  val api = routes
-  val api = DebuggingDirectives.logRequest("AkkaRest", Logging.WarningLevel)(routes)
+  val api = routes
+//  val api = DebuggingDirectives.logRequest("AkkaRest", Logging.WarningLevel)(routes)
   val serverBinding: Future[Http.ServerBinding] = Http().newServerAt("0.0.0.0", 8082).bind(api)
 
   serverBinding.onComplete {

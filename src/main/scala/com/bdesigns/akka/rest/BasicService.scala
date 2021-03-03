@@ -42,7 +42,7 @@ trait BasicService extends Json4sFormat
       path("auth") {
         post {
           val uuid = java.util.UUID.randomUUID.toString
-          logger.warn(s"auth uuid is $uuid")
+          logger.debug(s"auth uuid is $uuid")
           setCookie(HttpCookie(CookieName, uuid)) {
             respondWithHeaders(RawHeader("x-my-header", "my-akka-test")) {
               complete(StatusCodes.OK)
@@ -59,13 +59,13 @@ trait BasicService extends Json4sFormat
                 val (sourceQueue, eventsSource) = queue()
                 val key = sessionCookie.value
                 streamingActor ! StreamingEventSourceActor.Subscribe(key, sourceQueue)
-                logger.warn(s"subscribe $key")
+                logger.debug(s"subscribe $key")
                 eventsSource
                   .watchTermination() { (m, f) =>
                     f.onComplete(r => {
-                      logger.warn(s"Unsubscribe $key")
+                      logger.debug(s"Unsubscribe $key")
                       streamingActor ! StreamingEventSourceActor.Unsubscribe(key)
-                      logger.warn(r.toString)
+                      logger.debug(r.toString)
                     })
                     m
                   }
