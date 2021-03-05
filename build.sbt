@@ -19,10 +19,10 @@ dockerExposedPorts := Seq(8082)
 dockerRepository := Some("bdesigns")
 daemonUser in Docker    := "daemon"
 //packageName in Docker := "server-akka"
+
 dockerCommands ++= Seq(
   Cmd("USER", "root"),
   ExecCmd("RUN", "apk", "add", "--no-cache", "bash")
-//  ExecCmd("RUN", "apk", "add", "redis")
 )
 
 scriptClasspath in bashScriptDefines ~= (cp => "/etc/akka-server" +: cp)
@@ -46,9 +46,7 @@ lazy val dependencies =
     val redis = "net.debasishg" %% "redisclient" % "3.30"
     val jodaTime = "com.github.nscala-time" %% "nscala-time" % "2.26.0"
     val akkaStreamTyped = "com.typesafe.akka" %% "akka-stream-typed" % akkaVersion
-    val akkaStream = "com.typesafe.akka" %% "akka-stream" % akkaVersion
     val akkaActorTyped = "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion
-    val akkaActor = "com.typesafe.akka" %% "akka-actor" % akkaVersion
     val akkaHttp = "com.typesafe.akka" %% "akka-http" % akkaHttpVersion
     val akkaTestKitTyped = "com.typesafe.akka" %% "akka-testkit-typed" % "2.5.12"
     val akkaSlf4j = "com.typesafe.akka" %% "akka-slf4j" % akkaVersion
@@ -67,9 +65,7 @@ lazy val root = (project in file("."))
       dependencies.cors,
       dependencies.redis,
       dependencies.akkaStreamTyped,
-//      dependencies.akkaStream,
       dependencies.akkaActorTyped,
-//      dependencies.akkaActor,
       dependencies.akkaHttp,
       dependencies.akkaSlf4j,
       dependencies.jodaTime,
